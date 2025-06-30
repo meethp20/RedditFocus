@@ -46,9 +46,25 @@ function trackSubredditVisit() {
   }
 }
 
-function checkAndBlock() {
+async function checkAndBlock() {
   const subreddit = getCurrentSubreddit();
-  if (subreddit && blockedSubreddits.includes(subreddit.toLowerCase())) {
+  if (!subreddit) return;
+
+  // Check for temporary unblock
+  const tempUnblockKey = `tempUnblock_${subreddit.toLowerCase()}`;
+  const result = await chrome.storage.local.get(["blockedSubreddits", tempUnblockKey]);
+  blockedSubreddits = result.blockedSubreddits || [];
+  const tempUnblockUntil = result[tempUnblockKey] || 0;
+  const now = Date.now();
+
+  if (blockedSubreddits.includes(subreddit.toLowerCase())) {
+    if (now < tempUnblockUntil) {
+      // Still temporarily unblocked, do not block
+      return;
+    } else if (tempUnblockUntil) {
+      // Unblock expired, remove the key
+      await chrome.storage.local.remove(tempUnblockKey);
+    }
     blockPage(subreddit);
   }
 }
@@ -64,7 +80,7 @@ function blockPage(subreddit) {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.9);
+      background: #000;
       z-index: 10000;
       display: flex;
       align-items: center;
@@ -74,31 +90,36 @@ function blockPage(subreddit) {
     ">
       <div style="
         background: #333;
-        padding: 40px;
+        padding: 30px;
         border-radius: 10px;
         text-align: center;
-        max-width: 400px;
+        max-width: 380px;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
       ">
-        <h2 style="margin-top: 0; color: #ff4444;">Subreddit Blocked</h2>
-        <p>r/${subreddit} is in your blocked list.</p>
-        <p>Take a break and focus on more productive activities!</p>
+        <h2 style="margin-top: 0; color: #ff4444; font-size: 22px;">Subreddit Blocked</h2>
+        <p style="font-size: 16px;">r/${subreddit} is in your blocked list.</p>
+        <p style="font-size: 14px; color: #ccc;">Take a break and focus on more productive activities!</p>
         <button id="unblock-temp" style="
           background: #ff4444;
           color: white;
           border: none;
-          padding: 10px 20px;
+          padding: 12px 24px;
           border-radius: 5px;
           cursor: pointer;
           margin: 10px;
+          font-size: 14px;
+          font-weight: bold;
         ">Unblock for 10 minutes</button>
         <button id="go-back" style="
           background: #666;
           color: white;
           border: none;
-          padding: 10px 20px;
+          padding: 12px 24px;
           border-radius: 5px;
           cursor: pointer;
           margin: 10px;
+          font-size: 14px;
+          font-weight: bold;
         ">Go Back</button>
       </div>
     </div>
@@ -121,6 +142,8 @@ function blockPage(subreddit) {
   });
 }
 
+
+
 // Listen for storage changes (when blocked subreddits are updated)
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (changes.blockedSubreddits) {
@@ -128,3 +151,4 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     checkAndBlock();
   }
 });
+
